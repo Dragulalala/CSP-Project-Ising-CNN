@@ -22,7 +22,7 @@ def build_model(config_size, hidden_nodes):
 
 for L in [10, 20, 30, 40, 60]:
 
-    data = np.load(f"CSPProject/CSP-Project-Ising-CNN/data/L{L}_ising.npz")
+    data = np.load(f"CSPProject/CSP-Project-Ising-CNN/data_decorr/L{L}_ising.npz")
     """split data into input and output"""
     T = data["temperatures"]
     T_c = 2 / np.log(1 + np.sqrt(2))        
@@ -45,7 +45,7 @@ for L in [10, 20, 30, 40, 60]:
     train_T, val_T, test_T = np.split(T, [80000, 90000])
     #print(train_conf.shape)
 
-    model3_2 = build_model(configs.shape[1], 3)
+    model3_2 = build_model(configs.shape[1], 100)
 
     w_init, b_init = model3_2.layers[1].get_weights()
 
@@ -58,6 +58,6 @@ for L in [10, 20, 30, 40, 60]:
     )
 
     # Save after training
-    model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_3/ising_classifier_L{L}.h5")
+    model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_100/ising_classifier_L{L}.h5")
 
 
