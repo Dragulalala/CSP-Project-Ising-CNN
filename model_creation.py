@@ -3,6 +3,9 @@ import tensorflow as tf
 print(tf.__version__) 
 from matplotlib import pyplot as plt
 from tensorflow.keras.models import load_model
+import json
+from pathlib import Path
+
 
 DATA_DIR = "CSPProject/CSP-Project-Ising-CNN/data"
 
@@ -55,6 +58,15 @@ for L in [10, 20, 30, 40, 60]:
         batch_size = 256,
         epochs = 200
     )
+
+
+    file_path = f'CSPProject/CSP-Project-Ising-CNN/training_history_100/L{L}.json'
+    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+
+    with open(file_path, 'w') as f:
+        json.dump(history.history, f)
+
+    print(f"Successfully saved history to {file_path}")
 
     # Save after training
     model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_100/ising_classifier_L{L}.h5")
