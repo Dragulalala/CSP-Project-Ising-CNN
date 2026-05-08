@@ -2,7 +2,6 @@ import numpy as np
 import tensorflow as tf
 print(tf.__version__) 
 from matplotlib import pyplot as plt
-import pandas as pd
 from tensorflow.keras.models import load_model
 
 DATA_DIR = "CSPProject/CSP-Project-Ising-CNN/data"
