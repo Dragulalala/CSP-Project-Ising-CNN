@@ -149,7 +149,7 @@ import os
 
 # ── parameters ────────────────────────────────────────────────────────────────
 L_values_data = [10, 20, 30, 40, 60, 70, 80, 90, 100]   # lattice sizes to generate
-T_min, T_max  = 1.0, 3.6               # temperature range
+T_min, T_max  = 1.0, 3.5383706284260401               # temperature range
 N_temps       = 40                     # number of temperature points
 N_per_temps   = 2500                   # samples per temperature point
 Ntherm        = 10000                  # Wolff steps to thermalize
@@ -160,7 +160,9 @@ output_dir = "CSPProject/CSP-Project-Ising-CNN/data"
 os.makedirs(output_dir, exist_ok=True)
 # ──────────────────────────────────────────────────────────────────────────────
 
-temperatures_data = np.linspace(T_min, T_max, N_temps)
+temperatures_data = np.linspace(T_min, T_max, N_temps, endpoint=True, dtype=np.float64)
+print(temperatures_data)
+
 
 
 def temperature_worker(args):
@@ -226,3 +228,18 @@ if __name__ == "__main__":
         )
 
         print(f"Saved L={L} configurations to {filename}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from scipy.interpolate import interp1d
-from scipy.optimize import brentq  # replaces fsolve
+from scipy.optimize import brentq
 
 def load_npz_data(base_path, L):
     first_half_path  = os.path.join(base_path, f'L{L}_tri_first_half.npz')
@@ -45,10 +45,7 @@ def process_binder_data(temperatures, spins):
 
 
 def find_intersection_brentq(res1, res2, t_theory=3.640957):
-    """
-    Finds the Binder cumulant intersection robustly by scanning for a
-    sign change in the difference curve, then bracketing with brentq.
-    """
+    """Find Binder cumulant intersection with brentq."""
     t_min = max(res1['Temperature'].min(), res2['Temperature'].min())
     t_max = min(res1['Temperature'].max(), res2['Temperature'].max())
 
@@ -58,7 +55,6 @@ def find_intersection_brentq(res1, res2, t_theory=3.640957):
     def diff(t):
         return f1(t) - f2(t)
 
-    # Scan for sign changes across the full overlapping range
     t_scan = np.linspace(t_min, t_max, 2000)
     d_scan = diff(t_scan)
 
@@ -70,7 +66,6 @@ def find_intersection_brentq(res1, res2, t_theory=3.640957):
             "Check that your curves actually cross in this range."
         )
 
-    # If multiple crossings, pick the one closest to the theoretical Tc
     brackets = [(t_scan[i], t_scan[i + 1]) for i in sign_changes]
     best_bracket = min(brackets, key=lambda b: abs(np.mean(b) - t_theory))
 
@@ -78,9 +73,8 @@ def find_intersection_brentq(res1, res2, t_theory=3.640957):
     return t_c
 
 
-# --- Configuration ---
 TC_TRI    = 3.640957
-L_sizes   = [10, 20, 30, 40, 60, 70, 80, 90, 100]
+L_sizes   = [10, 20, 30, 40, 60]
 base_path = 'CSPProject/CSP-Project-Ising-CNN/tri_data_expanded/'
 
 results_dict = {}
@@ -95,7 +89,6 @@ for L in L_sizes:
     except FileNotFoundError as e:
         print(f"  Skipping L={L}: {e}")
 
-# --- Calculating Tc via Intersection ---
 if len(results_dict) >= 2:
     sizes = sorted(results_dict.keys())
     L1, L2 = sizes[-2], sizes[-1]
