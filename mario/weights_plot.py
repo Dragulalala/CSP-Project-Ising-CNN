@@ -43,7 +43,7 @@ L = [10, 20, 30, 40, 60]
 
 fig, axs = plt.subplots(1, 5, figsize=(20, 4))
 for i, l in enumerate(L):
-    new_model = tf.keras.models.load_model(f'../models_3/ising_classifier_L{l}.h5', compile=False)
+    new_model = tf.keras.models.load_model(f'../ian/ian_repo/models_3/ising_classifier_L{l}.h5', compile=False)
     data = np.load(f"../data_test/L{l}_ising.npz")
     weights, bias = new_model.layers[1].get_weights()
     hidden_args = data['spins'] @ weights + bias
