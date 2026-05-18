@@ -11,10 +11,10 @@ DATA_DIR = "data_decorr/"
 OUT_DIR = "models_100_mario/"
 
 BATCH_SIZE = 32
-LAM_VAR = 3e-1   # weight-variance regularization strength (pushes w_ji toward being constant in i)
-L2 = 4e-2        # keep overall weight magnitude bounded
+#LAM_VAR = 3e-1   # weight-variance regularization strength (pushes w_ji toward being constant in i)
+L2 = 3e-3       # keep overall weight magnitude bounded
 
-
+"""
 @tf.keras.utils.register_keras_serializable()
 class VarianceL2Regularizer(tf.keras.regularizers.Regularizer):
     #L2 plus a penalty on the variance of each neuron's weight vector across
@@ -30,7 +30,7 @@ class VarianceL2Regularizer(tf.keras.regularizers.Regularizer):
 
     def get_config(self):
         return {'l2': float(self.l2), 'lam_var': float(self.lam_var)}
-"""
+
 
 @tf.keras.utils.register_keras_serializable()
 class WeightVarianceRegularizer(tf.keras.regularizers.Regularizer):
