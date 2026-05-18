@@ -3,16 +3,15 @@ import pandas as pd
 import os
 from tqdm import tqdm
 
-input_dir = "C:/csp/"
-output_dir = "CSPProject/CSP-Project-Ising-CNN/tri_data_expanded"
+input_dir = "C:/CSP/CSPProject/CSP-Project-Ising-CNN/tri_data_2/"
+output_dir = "CSPProject/CSP-Project-Ising-CNN/tri_data_2/"
 os.makedirs(output_dir, exist_ok=True)
 
-for L in [ 100]:
+for L in [ 10,20,30,40]:
     print(f"Processing L={L}...")
 
     csv_filename = os.path.join(input_dir, f"L{L}_tri.csv")
 
-    # First pass: get total rows for progress bar
     total_rows = sum(1 for _ in open(csv_filename, "r", encoding="utf-8")) - 1
 
     temps_list = []

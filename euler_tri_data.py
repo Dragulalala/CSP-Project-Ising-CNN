@@ -15,7 +15,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
             d_bonds[i, j] = False
             cluster_labels[i, j] = 0
 
-    # 1. Create bonds (Right, Down, and Down-Right for triangular topology)
     for i in range(L):
         for j in range(L):
             # Right neighbor
@@ -44,7 +43,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
     stack_i = np.empty(L * L, dtype=np.int32)
     stack_j = np.empty(L * L, dtype=np.int32)
     
-    # 2. Cluster building and flipping
     for i in range(L):
         for j in range(L):
             if cluster_labels[i, j] == 0:
@@ -174,16 +172,14 @@ def simulate_temperature_worker(args):
         while spins_flipped < N: 
             spins_flipped += sim.swendsen_wang_step()
 
-    # Storage array for this temperature's configurations
     configs = np.zeros((Nsample, N), dtype=np.int8)
 
-    # First sample right after thermalization
     configs[0] = sim.spins.flatten()
 
-    # Sampling Loop
+    # Sampling kloop
     for n in range(1, Nsample):
         
-        # Subsweep Loop to guarantee uncorrelated configurations
+        # Subsweep 
         spins_flipped = 0
         while spins_flipped < Nsubsweep:
             spins_flipped += sim.swendsen_wang_step()
@@ -197,7 +193,7 @@ if __name__ == '__main__':
     start_time = time.perf_counter()
     print("Starting Triangular Lattice Swendsen-Wang Configurations Generation...\n")
 
-    # Global Parameters
+    # Parameters
     J = 1 
     temps = np.linspace(2.0, 5.0, 40)
     L_values = [10, 20, 30, 40, 60]
@@ -219,14 +215,13 @@ if __name__ == '__main__':
         print(f"--- Starting simulation for Triangular Lattice L = {L} ---")
         
         N = L**2
-        Nsubsweep = N * 500 # Amount of work between samples to assure decorrelation
+        Nsubsweep = N * 500 # decorr
 
         tasks = [(t, temps[t], L, J, N, Nthermalization, Nsample, Nsubsweep) for t in range(len(temps))]
 
         with multiprocessing.Pool(processes=usable_cores) as pool:
             results = list(tqdm(pool.imap(simulate_temperature_worker, tasks), total=len(tasks), desc=f"L={L} Progress"))
 
-        # Compile data to save to CSV
         print(f"\nAggregating data for L={L}...")
         
         # Format: [Temp, spin_0, spin_1, ..., spin_N-1]
@@ -239,13 +234,10 @@ if __name__ == '__main__':
                 all_data_matrix[row_idx, 1:] = configs[n]
                 row_idx += 1
 
-        # File saving
         filename = os.path.join(output_dir, f'L{L}_tri.csv')
         
-        # Determine formatting: temperature as float, spins as integers
         fmt_str = '%.6f' + ',' + ','.join(['%d'] * N)
         
-        # Create a header row matching the CSV structure
         header = "Temperature," + ",".join([f"spin_{i}" for i in range(N)])
 
         np.savetxt(

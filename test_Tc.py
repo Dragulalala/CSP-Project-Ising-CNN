@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 from scipy.interpolate import interp1d
-from scipy.optimize import brentq  # replaces fsolve
+from scipy.optimize import brentq
 
 def process_npz_binder(file_path):
     data = np.load(file_path)
@@ -29,12 +29,7 @@ def process_npz_binder(file_path):
 
 
 def find_intersection_brentq(res1, res2):
-    """
-    Finds the intersection of two Binder cumulant curves robustly.
-    Scans the overlapping temperature range for a sign change in the
-    difference, then uses brentq to pin down the exact crossing.
-    """
-    # Overlapping temperature range only
+    """Find intersection of two Binder curves."""
     t_min = max(res1['T'].min(), res2['T'].min())
     t_max = min(res1['T'].max(), res2['T'].max())
 
@@ -44,7 +39,6 @@ def find_intersection_brentq(res1, res2):
     def diff(t):
         return f1(t) - f2(t)
 
-    # Scan for sign changes across the overlapping range
     t_scan = np.linspace(t_min, t_max, 2000)
     d_scan = diff(t_scan)
 
@@ -56,7 +50,6 @@ def find_intersection_brentq(res1, res2):
             "Check that your curves actually cross in this range."
         )
 
-    # Use the sign change closest to the theoretical Tc as the bracket
     brackets = [(t_scan[i], t_scan[i + 1]) for i in sign_changes]
     best_bracket = min(brackets, key=lambda b: abs(np.mean(b) - TC_SQUARE))
 
@@ -64,8 +57,7 @@ def find_intersection_brentq(res1, res2):
     return t_c
 
 
-# --- Configuration ---
-L_sizes   = [10, 20, 30, 40, 60, 70, 80, 90, 100]
+L_sizes   = [10, 20, 30, 40, 60]
 base_path = 'CSPProject/CSP-Project-Ising-CNN/data_decorr/'
 
 TC_SQUARE    = 2 / np.log(1 + np.sqrt(2))
@@ -81,7 +73,6 @@ for L in L_sizes:
         results_dict[L] = res
         plt.plot(res['T'], res['U_L'], 'o-', label=f'L={L}', markersize=4)
 
-# --- Tc via Intersection ---
 if len(results_dict) >= 2:
     sizes = sorted(results_dict.keys())
     L1, L2 = sizes[-2], sizes[-1]
