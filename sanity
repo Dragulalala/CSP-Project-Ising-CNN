@@ -5,12 +5,12 @@ from numba import njit
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-# Base Parameters
+# params
 J = 1 
 Tc_square = 2 / np.log(1 + np.sqrt(2))  # ≈ 2.269
 Tc_triangular = 4 / np.log(3)           # ≈ 3.641
 
-# ── Wolff Algorithm (Square Lattice) ─────────────────────────────────────────
+# Wolff (square)
 @numba.njit
 def _wolff_step_numba(spins, wolff_marker, L, wolff_prob):
     wolff_marker.fill(0)
@@ -77,22 +77,20 @@ class IsingMC_Wolff:
         self.M -= 2 * ground_spin * N_cluster
 
 
-# ── Metropolis-Rosenbluth-Teller (MRT) Algorithm ──────────────────────────────
+# Metropolis
 @numba.njit
 def _mrt_sweep_numba(spins, L, T, M):
-    """Performs one full Monte Carlo Sweep (L*L random site attempts)"""
+    """L^2 sweep"""
     for _ in range(L * L):
         i = np.random.randint(0, L)
         j = np.random.randint(0, L)
         
         S = spins[i, j]
-        # Periodic boundary conditions
         neighbor_sum = (spins[(i+1)%L, j] + spins[(i-1)%L, j] + 
                         spins[i, (j+1)%L] + spins[i, (j-1)%L])
         
         dE = 2 * J * S * neighbor_sum
         
-        # Metropolis acceptance criterion
         if dE <= 0 or np.random.random() < np.exp(-dE / T):
             spins[i, j] = -S
             M -= 2 * S
@@ -116,7 +114,7 @@ class IsingMC_Metropolis:
         self.spins, self.M = _mrt_sweep_numba(self.spins, self.L, self.T, self.M)
 
 
-# ── Swendsen-Wang Algorithm (Triangular Lattice) ─────────────────────────────
+# Swendsen-Wang (triangular)
 @njit
 def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_labels):
     for i in range(L):
@@ -126,58 +124,43 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
             d_bonds[i, j] = False
             cluster_labels[i, j] = 0
 
-    # 1. Create bonds (Right, Down, and Down-Right for triangular topology)
+    # build bonds
     for i in range(L):
         for j in range(L):
-            # Right neighbor
             r_i = i
             r_j = (j + 1) % L
-            if spins[i, j] == spins[r_i, r_j]:
-                if np.random.rand() < p:
-                    h_bonds[i, j] = True
-                    
-            # Down neighbor
+            if spins[i, j] == spins[r_i, r_j] and np.random.rand() < p:
+                h_bonds[i, j] = True
+
             d_i = (i + 1) % L
             d_j = j
-            if spins[i, j] == spins[d_i, d_j]:
-                if np.random.rand() < p:
-                    v_bonds[i, j] = True
+            if spins[i, j] == spins[d_i, d_j] and np.random.rand() < p:
+                v_bonds[i, j] = True
 
-            # Diagonal neighbor (Down-Right)
             diag_i = (i + 1) % L
             diag_j = (j + 1) % L
-            if spins[i, j] == spins[diag_i, diag_j]:
-                if np.random.rand() < p:
-                    d_bonds[i, j] = True
+            if spins[i, j] == spins[diag_i, diag_j] and np.random.rand() < p:
+                d_bonds[i, j] = True
 
     current_label = 1
-    
     stack_i = np.empty(L * L, dtype=np.int32)
     stack_j = np.empty(L * L, dtype=np.int32)
     
-    # 2. Cluster building and flipping
     for i in range(L):
         for j in range(L):
             if cluster_labels[i, j] == 0:
-                # Flip spin with 0.5 chance
                 new_spin = 1 if np.random.rand() < 0.5 else -1
-                
-                # Mark initial site
                 cluster_labels[i, j] = current_label
                 spins[i, j] = new_spin
-                
-                # Initialize stack
                 stack_i[0] = i
                 stack_j[0] = j
                 stack_ptr = 1
                 
-                # Walk
                 while stack_ptr > 0:
                     stack_ptr -= 1
                     curr_i = stack_i[stack_ptr]
                     curr_j = stack_j[stack_ptr]
                     
-                    # Right
                     right_j = (curr_j + 1) % L
                     if h_bonds[curr_i, curr_j] and cluster_labels[curr_i, right_j] == 0:
                         cluster_labels[curr_i, right_j] = current_label
@@ -186,7 +169,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
                         stack_j[stack_ptr] = right_j
                         stack_ptr += 1
                         
-                    # Left 
                     left_j = (curr_j - 1) % L
                     if h_bonds[curr_i, left_j] and cluster_labels[curr_i, left_j] == 0:
                         cluster_labels[curr_i, left_j] = current_label
@@ -195,7 +177,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
                         stack_j[stack_ptr] = left_j
                         stack_ptr += 1
                         
-                    # Down
                     down_i = (curr_i + 1) % L
                     if v_bonds[curr_i, curr_j] and cluster_labels[down_i, curr_j] == 0:
                         cluster_labels[down_i, curr_j] = current_label
@@ -204,7 +185,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
                         stack_j[stack_ptr] = curr_j
                         stack_ptr += 1
                         
-                    # Up 
                     up_i = (curr_i - 1) % L
                     if v_bonds[up_i, curr_j] and cluster_labels[up_i, curr_j] == 0:
                         cluster_labels[up_i, curr_j] = current_label
@@ -213,7 +193,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
                         stack_j[stack_ptr] = curr_j
                         stack_ptr += 1
 
-                    # Down-Right
                     dr_i = (curr_i + 1) % L
                     dr_j = (curr_j + 1) % L
                     if d_bonds[curr_i, curr_j] and cluster_labels[dr_i, dr_j] == 0:
@@ -223,7 +202,6 @@ def fast_swendsen_wang_step_tri(spins, L, p, h_bonds, v_bonds, d_bonds, cluster_
                         stack_j[stack_ptr] = dr_j
                         stack_ptr += 1
 
-                    # Up-Left
                     ul_i = (curr_i - 1) % L
                     ul_j = (curr_j - 1) % L
                     if d_bonds[ul_i, ul_j] and cluster_labels[ul_i, ul_j] == 0:
@@ -274,92 +252,73 @@ class IsingMC_SwendsenWang_Triangular:
         )
 
 
-# ── Execution and Plotting ───────────────────────────────────────────────────
+# run
 if __name__ == "__main__":
-    L = 60
-    T_min, T_max = 1.0, 5.0  # Range expanded to capture both critical points seamlessly
-    N_temps = 80
+    L = 10
+    T_min, T_max = 1.0, 5.0
+    N_temps = 40
     
     Ntherm = 2000
     Nsamples = 5000
     
     temperatures = np.linspace(T_min, T_max, N_temps)
     
-    # Square Lattice Arrays (Wolff)
     mag_wolff = np.zeros(N_temps)
     err_wolff = np.zeros(N_temps)
     
-    # Triangular Lattice Arrays (Swendsen-Wang)
     mag_sw = np.zeros(N_temps)
     err_sw = np.zeros(N_temps)
     
     print(f"Running Integrated Simulation for L={L}...")
     
     for idx, T in enumerate(tqdm(temperatures)):
-        # 1. Initialize Systems
         model_wolff = IsingMC_Wolff(L, T)
         model_sw = IsingMC_SwendsenWang_Triangular(L, T)
         
-        # 2. Thermalization
         for _ in range(Ntherm):
             model_wolff.wolff_step()
             model_sw.swendsen_wang_step()
             
-        # 3. Sampling
         m_w_sum = 0.0
         m_w_sq_sum = 0.0
-        
         m_s_sum = 0.0
         m_s_sq_sum = 0.0
         
         for _ in range(Nsamples):
-            # Wolff Step Evaluation (Square)
             model_wolff.wolff_step()
             mw = model_wolff.magnetisation()
             m_w_sum += mw
             m_w_sq_sum += mw**2
             
-            # Swendsen-Wang Step Evaluation (Triangular)
             model_sw.swendsen_wang_step()
             ms = np.abs(np.sum(model_sw.spins)) / (L ** 2)
             m_s_sum += ms
             m_s_sq_sum += ms**2
             
-        # 4. Statistical Metrics (Mean & SEM)
-        # Wolff (Square)
         mag_wolff[idx] = m_w_sum / Nsamples
         var_w = (m_w_sq_sum / Nsamples) - (mag_wolff[idx] ** 2)
         err_wolff[idx] = np.sqrt(max(0, var_w)) / np.sqrt(Nsamples)
         
-        # Swendsen-Wang (Triangular)
         mag_sw[idx] = m_s_sum / Nsamples
         var_s = (m_s_sq_sum / Nsamples) - (mag_sw[idx] ** 2)
         err_sw[idx] = np.sqrt(max(0, var_s)) / np.sqrt(Nsamples)
 
-    # ── Analytical Curves Calculation ────────────────────────────────────────
     T_dense = np.linspace(T_min, T_max, 500)
-    
-    # Square Lattice Exact Solution (Onsager)
     mag_exact_square = np.zeros_like(T_dense)
     mask_square = T_dense < Tc_square
     mag_exact_square[mask_square] = (1 - np.sinh(2 * J / T_dense[mask_square])**(-4))**(1/8)
-    
-    # Triangular Lattice Exact Solution (Potts 1952)
     mag_exact_tri = np.zeros_like(T_dense)
     mask_tri = T_dense < Tc_triangular
     z = np.exp(-2 * J / T_dense[mask_tri])
     mag_exact_tri[mask_tri] = (1 - (16 * z**6) / ((1 + 3 * z**2) * (1 - z**2)**3))**(1/8)
 
-    # ── Plotting Everything Together ─────────────────────────────────────────
     plt.figure(figsize=(11, 7))
     
-    # Simulation Data Points
     plt.errorbar(temperatures, mag_wolff, yerr=err_wolff, fmt='x', color='crimson', 
                  label='Wolff Cluster (Square)', alpha=0.7, capsize=3)
     plt.errorbar(temperatures, mag_sw, yerr=err_sw, fmt='x', color='royalblue', 
                  label='Swendsen-Wang (Triangular)', alpha=0.7, capsize=3)
     
-    # Complete Analytical Profiles (Up to Tc only)
     T_square_cut = T_dense[T_dense <= Tc_square]
     mag_square_cut = mag_exact_square[:len(T_square_cut)]
     plt.plot(T_square_cut, mag_square_cut, color='darkred', linestyle='--', linewidth=1.5,
@@ -370,7 +329,6 @@ if __name__ == "__main__":
     plt.plot(T_tri_cut, mag_tri_cut, color='navy', linestyle='-.', linewidth=1.5,
              label='Exact Triangular Solution')
     
-    # Critical Temperature Boundaries
     plt.axvline(Tc_square, color='crimson', linestyle=':', alpha=0.8,
                 label=r'Square $T_c \approx 2.269$')
     plt.axvline(Tc_triangular, color='royalblue', linestyle=':', alpha=0.8,

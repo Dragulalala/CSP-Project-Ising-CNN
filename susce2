@@ -9,7 +9,7 @@ TC_EXACT = {
     'triangular': 3.640957   # 4/ln(3)
 }
 
-L_sizes = [ 20, 30, 40, 60]
+L_sizes = [10, 20, 30, 40, 60]
 
 CONFIGS = {
     'square': {
@@ -53,6 +53,7 @@ def compute_susceptibility(temperatures, spins, L):
         
         chi = (N / t) * (m2_avg - m_abs_avg**2)
         chi_err = (N / t) * np.std(M**2, ddof=1) / np.sqrt(len(M))
+        
         results.append({'Temperature': t, 'Chi': chi, 'Chi_err': chi_err})
 
     return pd.DataFrame(results)
@@ -121,7 +122,7 @@ for geom in ['square', 'triangular']:
         chi_maxs.append(Chi_max)
         chi_max_errs.append(Chi_max_err)
         inv_L.append(1.0 / L)
-        print(f"    L={L}: T* = {T_star:.5f} ± {T_star_err:.5f} (SEM) | Chi_max = {Chi_max:.3f} ± {Chi_max_err:.3f} (SEM)")
+        print(f"    L={L}: T* = {T_star:.5f} ± {T_star_err:.5f} | Chi_max = {Chi_max:.3f} ± {Chi_max_err:.3f} (SEM)")
 
     crossing_Ts = np.array(crossing_Ts)
     crossing_errs = np.array(crossing_errs)
@@ -145,6 +146,7 @@ for geom in ['square', 'triangular']:
     ln_L = np.log(available_Ls)
     ln_chi_max = np.log(chi_maxs)
     ln_chi_max_err = chi_max_errs / chi_maxs
+    
     scale_weights = 1.0 / (ln_chi_max_err ** 2)
     scale_coeffs, scale_cov = np.polyfit(ln_L, ln_chi_max, 1, w=scale_weights, cov=True)
     measured_exponent = scale_coeffs[0]
@@ -155,41 +157,49 @@ for geom in ['square', 'triangular']:
 
     colors  = plt.cm.plasma(np.linspace(0.1, 0.9, len(available_Ls)))
     markers = ['x', '^', 'o', 'D', 's', 'P', '*', 'v', 'h']
+    safe_geom_name = geom.lower()
 
-    fig, (ax_chi, ax_fss, ax_scale) = plt.subplots(1, 3, figsize=(19, 5))
-
+    fig_chi, ax_chi = plt.subplots(figsize=(7, 5))
     for j, L in enumerate(available_Ls):
         df = chi_dict[L]
         ax_chi.errorbar(df['Temperature'], df['Chi'], yerr=df['Chi_err'],
-                      marker=markers[j % len(markers)], markersize=4,
-                      linestyle='-', linewidth=1.2, color=colors[j],
-                      capsize=2, elinewidth=0.8, label=f'L = {L}')
+                        marker=markers[j % len(markers)], markersize=4,
+                        linestyle='-', linewidth=1.2, color=colors[j],
+                        capsize=2, elinewidth=0.8, label=f'L = {L}')
 
     ax_chi.axvline(x=tc_exact, color='darkorange', linewidth=1.8, linestyle='-',
-                 label=f'Exact $T_c/J = {tc_exact:.4f}$')
+                   label=f'Exact $T_c/J = {tc_exact:.4f}$')
     ax_chi.axvline(x=Tc_extrap, color='steelblue', linewidth=1.5, linestyle='--',
-                 label=fr'Extrap. $T_c/J = {Tc_extrap:.4f}$')
+                   label=fr'Extrap. $T_c/J = {Tc_extrap:.4f}$')
     ax_chi.set_xlabel('$T/J$', fontsize=13)
     ax_chi.set_ylabel(r'Magnetic Susceptibility $\chi$', fontsize=13)
-    ax_chi.legend(fontsize=8, framealpha=0.7)
+    ax_chi.legend(fontsize=9, framealpha=0.7)
     ax_chi.grid(True, alpha=0.25)
+    
+    plt.tight_layout()
+    save_path_chi = f'CSPProject/CSP-Project-Ising-CNN/susceptibility_{safe_geom_name}.pdf'
+    os.makedirs(os.path.dirname(save_path_chi), exist_ok=True)
+    plt.savefig(save_path_chi, dpi=900, bbox_inches='tight')
+    plt.show()
+    print(f"Saved Susceptibility plot to {save_path_chi}")
 
+    fig_fss, ax_fss = plt.subplots(figsize=(7, 5))
     ax_fss.errorbar(inv_L, crossing_Ts, yerr=crossing_errs, marker='v', linestyle='', 
                     color='crimson', markersize=8, capsize=4, elinewidth=1.2,
-                    label=r'$T^*/J$ Peak Position (SEM)')
+                    label=r'$T^*/J$ Peak Position')
 
     ax_fss.plot(x_fit, y_fit, linestyle='--', linewidth=1.5, alpha=0.8, color='steelblue',
-              label=fr'Weighted Fit $T_c/J = {Tc_extrap:.4f} \pm {Tc_err:.4f}$')
+                label=fr'Weighted Fit $T_c/J = {Tc_extrap:.4f} \pm {Tc_err:.4f}$')
 
     ax_fss.axhline(y=tc_exact, color='darkorange', linewidth=1.8, linestyle='-',
-                 label=fr'Exact $T_c/J = {tc_exact:.4f}$')
-                 
+                   label=fr'Exact $T_c/J = {tc_exact:.4f}$')
+                   
     ax_fss.errorbar(0, Tc_extrap, yerr=Tc_err, marker='o', color='steelblue', 
-                    markersize=6, capsize=4, elinewidth=1.5, label='Extrapolated $T_c$ (SD)')
+                    markersize=6, capsize=4, elinewidth=1.5, label='Extrapolated $T_c$')
 
     for k, (x, y, L) in enumerate(zip(inv_L, crossing_Ts, available_Ls)):
         ax_fss.annotate(f'L={L}', xy=(x, y), xytext=(8, -2),
-                      textcoords='offset points', fontsize=8, color='dimgray')
+                        textcoords='offset points', fontsize=8, color='dimgray')
 
     ax_fss.set_xlabel('$1/L$', fontsize=13)
     ax_fss.set_ylabel('$T^*/J$', fontsize=13)
@@ -197,29 +207,8 @@ for geom in ['square', 'triangular']:
     ax_fss.legend(fontsize=9, framealpha=0.7)
     ax_fss.grid(True, alpha=0.25)
 
-    ax_scale.errorbar(ln_L, ln_chi_max, yerr=ln_chi_max_err, marker='o', linestyle='',
-                      color='indigo', markersize=7, capsize=4, elinewidth=1.2,
-                      label='Peaks Measured (SEM)')
-    
-    ln_L_fit = np.linspace(ln_L.min() - 0.1, ln_L.max() + 0.1, 100)
-    ln_chi_fit = np.polyval(scale_coeffs, ln_L_fit)
-    ax_scale.plot(ln_L_fit, ln_chi_fit, 'g--', linewidth=1.5,
-                  label=fr'Linear Fit ($\nu/\gamma$ = {measured_exponent:.3f} $\pm$ {exponent_err:.3f})')
-    
-    ln_chi_theory_line = 1.75 * (ln_L_fit - ln_L[0]) + ln_chi_max[0]
-    ax_scale.plot(ln_L_fit, ln_chi_theory_line, color='darkgray', linestyle=':', linewidth=1.5,
-                  label='Theoretical Slope = 1.750')
-    
-    ax_scale.set_xlabel(r'$\ln(L)$', fontsize=13)
-    ax_scale.set_ylabel(r'$\ln(\chi_{\max})$', fontsize=13)
-    ax_scale.legend(fontsize=9, framealpha=0.7)
-    ax_scale.grid(True, alpha=0.25)
-
     plt.tight_layout()
-    
-    safe_geom_name = geom.lower()
-    save_path = f'CSPProject/CSP-Project-Ising-CNN/susc_fss2_{safe_geom_name}.pdf'
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=900, bbox_inches='tight')
+    save_path_fss = f'CSPProject/CSP-Project-Ising-CNN/fss_{safe_geom_name}.pdf'
+    plt.savefig(save_path_fss, dpi=900, bbox_inches='tight')
     plt.show()
-    print(f"Saved to {save_path}")
+    print(f"Saved FSS plot to {save_path_fss}")

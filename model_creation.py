@@ -12,7 +12,7 @@ DATA_DIR = "CSPProject/CSP-Project-Ising-CNN/data"
 BATCH_SIZE = 32
 
 def build_model(config_size, hidden_nodes):
-    l2 = .05  # regularization strength λ
+    l2 = .05  # regularization strength 
     initializer = tf.keras.initializers.GlorotNormal()
     x = tf.keras.Input((config_size,))
     y = tf.keras.layers.Dense(hidden_nodes, activation='sigmoid', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(l2))(x)
@@ -35,7 +35,7 @@ for L in [10, 20, 30, 40, 60]:
     idx = np.arange(len(T))
     rng.shuffle(idx)
 
-    # Apply the same permutation to all arrays
+    # permutation
     T = T[idx]
     configs = configs[idx]
     labels  = labels[idx, :]
@@ -68,7 +68,6 @@ for L in [10, 20, 30, 40, 60]:
 
     print(f"Successfully saved history to {file_path}")
 
-    # Save after training
     model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_100_l2=.05/ising_classifier_L{L}.h5")
 
 
