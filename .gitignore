@@ -1,3 +1,5 @@
 .DS_Store
 .venv/data/*.csv
-.venv.DS_Store
+.venv
+.claude/worktrees/crazy-snyder-d6407e
+.claude/worktrees/gracious-hugle-51ce7e
