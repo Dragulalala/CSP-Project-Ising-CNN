@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 
 # ── Critical parameters ────────────────────────────────────────────────────────
 T_c = 2.269185          # exact Tc/J for 2-D square-lattice Ising = 2/ln(1+√2)
-T_c = 3.64095           # triangular lattice Tc/J = 4/ln(3) ≈ 3.64095
+#T_c = 3.64095           # triangular lattice Tc/J = 4/ln(3) ≈ 3.64095
 nu  = 1.0               # correlation-length exponent
 
 L_sizes = [10, 20, 30, 40, 60]
@@ -32,15 +32,41 @@ for i, L in enumerate(L_sizes):
 
     # ── Load model & data ──────────────────────────────────────────────────────
     model = load_model(
-        f"CSPProject/CSP-Project-Ising-CNN/models_100/ising_classifier_L{L}.h5"
+        f"CSPProject/CSP-Project-Ising-CNN/models_100_l2=.05/ising_classifier_L{L}.h5"
     )
     data    = np.load(
-        f"CSPProject/CSP-Project-Ising-CNN/tri_data_2/L{L}_tri.npz"
+        f"CSPProject/CSP-Project-Ising-CNN/data_test_4/L{L}_ising.npz"
     )
     T       = data["temperatures"]
     configs = data["spins"]
 
     print(f"Config shape for L={L}: {configs.shape}")
+
+    unique_T     = np.sort(np.unique(T))
+
+    indices_to_keep = []
+
+    # 2. Loop through each unique temperature and grab the first 10 indices
+    for uT in unique_T:
+        # Find all index positions where temperature equals uT
+        all_indices_for_this_T = np.where(T == uT)[0]
+        
+        # Take just the first n positions
+        indices_to_keep.extend(all_indices_for_this_T[:2500])
+
+    # Convert the list of indices to a numpy array
+    indices_to_keep = np.array(indices_to_keep)
+
+    # 3. Filter your original data using these indices
+    T_reduced = T[indices_to_keep]
+    configs_reduced = configs[indices_to_keep]
+
+    print(f"Original configurations: {len(configs)}")
+    print(f"Reduced configurations: {len(configs_reduced)}")
+
+    configs= configs_reduced
+    T=T_reduced
+
 
 
     # ── Predictions ────────────────────────────────────────────────────────────
@@ -50,7 +76,7 @@ for i, L in enumerate(L_sizes):
 
     # ── Average & SEM per temperature ──────────────────────────────────────────
     # ERROR CALCULATION: Standard Error of the Mean 1.96*(SEM) = std / sqrt(n)
-    unique_T     = np.sort(np.unique(T))
+
     avg_ord      = np.empty(len(unique_T))
     avg_dis      = np.empty(len(unique_T))
     sem_ord      = np.empty(len(unique_T))
@@ -61,8 +87,8 @@ for i, L in enumerate(L_sizes):
         n             = mask.sum()
         avg_ord[j]    = np.mean(ordered_out[mask])
         avg_dis[j]    = np.mean(disordered_out[mask])
-        sem_ord[j]    = 1.96 * np.std(ordered_out[mask],    ddof=1) / np.sqrt(n)
-        sem_dis[j]    = 1.96 * np.std(disordered_out[mask], ddof=1) / np.sqrt(n)
+        sem_ord[j]    = 1.96* np.std(ordered_out[mask],    ddof=1) / np.sqrt(n)
+        sem_dis[j]    = 1.96* np.std(disordered_out[mask], ddof=1) / np.sqrt(n)
 
     print(f"L={L:3d}: {len(unique_T)} temperature points, "
           f"T ∈ [{unique_T.min():.3f}, {unique_T.max():.3f}]")
@@ -202,11 +228,7 @@ ax_f.text(0.03, 0.97, 'c', transform=ax_f.transAxes,
           fontsize=14, fontweight='bold', va='top')
 ax_f.grid(True, alpha=0.25)
 
-plt.suptitle(
-    r'Finite-size scaling of CNN outputs — 2-D Ising model (square lattice)',
-    fontsize=13, y=1.01
-)
 plt.tight_layout()
-plt.savefig('CSPProject/CSP-Project-Ising-CNN/data_collapse_tri_2_1.96sem.pdf', dpi=900, bbox_inches='tight')
+plt.savefig('CSPProject/CSP-Project-Ising-CNN/data_collapse_4_1.96sem_l2=.05.pdf', dpi=900, bbox_inches='tight')
 plt.show()
 print("Done. Figure saved to data_collapse")
