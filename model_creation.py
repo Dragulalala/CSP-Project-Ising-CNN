@@ -12,8 +12,8 @@ DATA_DIR = "CSPProject/CSP-Project-Ising-CNN/data"
 BATCH_SIZE = 32
 
 def build_model(config_size, hidden_nodes):
-    l2 = 1e-4  # regularization strength λ
-    initializer = tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0)
+    l2 = .05  # regularization strength λ
+    initializer = tf.keras.initializers.GlorotNormal()
     x = tf.keras.Input((config_size,))
     y = tf.keras.layers.Dense(hidden_nodes, activation='sigmoid', kernel_initializer=initializer, kernel_regularizer=tf.keras.regularizers.l2(l2))(x)
     z = tf.keras.layers.Dense(2, activation='sigmoid')(y)
@@ -24,7 +24,7 @@ def build_model(config_size, hidden_nodes):
 
 for L in [10, 20, 30, 40, 60]:
 
-    data = np.load(f"CSPProject/CSP-Project-Ising-CNN/data_decorr/L{L}_ising.npz")
+    data = np.load(f"CSPProject/CSP-Project-Ising-CNN/data_uploaded/L{L}_ising.npz")
     """split data into input and output"""
     T = data["temperatures"]
     T_c = 2 / np.log(1 + np.sqrt(2))        
@@ -56,11 +56,11 @@ for L in [10, 20, 30, 40, 60]:
         train_label,
         validation_data = (val_conf, val_label),
         batch_size = 256,
-        epochs = 200
+        epochs = 75
     )
 
 
-    file_path = f'CSPProject/CSP-Project-Ising-CNN/training_history_100/L{L}.json'
+    file_path = f'CSPProject/CSP-Project-Ising-CNN/training_history_100_l2=.05/L{L}.json'
     Path(file_path).parent.mkdir(parents=True, exist_ok=True)
 
     with open(file_path, 'w') as f:
@@ -69,6 +69,6 @@ for L in [10, 20, 30, 40, 60]:
     print(f"Successfully saved history to {file_path}")
 
     # Save after training
-    model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_100/ising_classifier_L{L}.h5")
+    model3_2.save(f"CSPProject/CSP-Project-Ising-CNN/models_100_l2=.05/ising_classifier_L{L}.h5")
 
 
