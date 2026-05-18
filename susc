@@ -1,0 +1,257 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+from scipy.interpolate import interp1d
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+TC_EXACT = {
+    'square': 2.269185,      # 2/ln(1+√2)
+    'triangular': 3.640957   # 4/ln(3)
+}
+
+L_sizes = [ 20, 30, 40, 60,70,80]
+
+CONFIGS = {
+    'square': {
+        'base_path': 'CSPProject/CSP-Project-Ising-CNN/data_decorr/',
+        'suffix': 'ising'
+    },
+    'triangular': {
+        'base_path': 'CSPProject/CSP-Project-Ising-CNN/tri_data_expanded/',
+        'suffix': 'tri'
+    }
+}
+
+# ── Data loading ───────────────────────────────────────────────────────────────
+def load_npz_data(base_path, L, suffix):
+    first_half_path  = os.path.join(base_path, f'L{L}_{suffix}_first_half.npz')
+    second_half_path = os.path.join(base_path, f'L{L}_{suffix}_second_half.npz')
+    single_path      = os.path.join(base_path, f'L{L}_{suffix}.npz')
+
+    if os.path.exists(first_half_path) and os.path.exists(second_half_path):
+        d1 = np.load(first_half_path)
+        d2 = np.load(second_half_path)
+        return (np.concatenate([d1["temperatures"], d2["temperatures"]]),
+                np.concatenate([d1["spins"],        d2["spins"]]))
+    elif os.path.exists(single_path):
+        d = np.load(single_path)
+        return d["temperatures"], d["spins"]
+    else:
+        raise FileNotFoundError(f"No npz file(s) found for L={L} in {base_path}")
+
+# ── Susceptibility Calculation ─────────────────────────────────────────────────
+def compute_susceptibility(temperatures, spins, L):
+    unique_T = np.sort(np.unique(temperatures))
+    results = []
+    N = L * L
+
+    for t in unique_T:
+        mask = temperatures == t
+        S = spins[mask]
+        
+        M = S.mean(axis=1)
+        m_abs_avg = np.mean(np.abs(M))
+        m2_avg = np.mean(M**2)
+        
+        chi = (N / t) * (m2_avg - m_abs_avg**2)
+        
+        # 1. Left Panel Vertical Error: Standard Error of the Mean (SEM)
+        chi_err = (N / t) * np.std(M**2, ddof=1) / np.sqrt(len(M))
+        
+        results.append({'Temperature': t, 'Chi': chi, 'Chi_err': chi_err})
+
+    return pd.DataFrame(results)
+
+# ── Peak Finding using Cubic Spline & Delta Method Error Propagation ───────────
+def find_susceptibility_peak(df):
+    f_chi = interp1d(df['Temperature'], df['Chi'], kind='cubic')
+    f_err = interp1d(df['Temperature'], df['Chi_err'], kind='linear')
+    
+    # Precise grid scan to pinpoint the spline maximum
+    t_scan = np.linspace(df['Temperature'].min(), df['Temperature'].max(), 5000)
+    chi_scan = f_chi(t_scan)
+    
+    max_idx = np.argmax(chi_scan)
+    T_star = t_scan[max_idx]
+    Chi_max = chi_scan[max_idx]
+    Chi_max_err = f_err(T_star)  # Vertical standard error at the peak
+    
+    # --- Rigorous Horizontal SEM Calculation (Delta Method) ---
+    # Find the two closest simulation data points to the peak to find local grid spacing
+    idx_nearest = np.argsort(np.abs(df['Temperature'] - T_star))
+    pt1 = df.iloc[idx_nearest[0]]
+    pt2 = df.iloc[idx_nearest[1]]
+    
+    dT_data = abs(pt1['Temperature'] - pt2['Temperature'])
+    # Estimate vertical standard error of the first derivative (slope) from data SEM
+    sig_slope = np.sqrt(pt1['Chi_err']**2 + pt2['Chi_err']**2) / dT_data
+    
+    # Find the second derivative at the peak using central finite differences on the spline
+    dt = 1e-4
+    f_double_prime = (f_chi(T_star + dt) - 2 * f_chi(T_star) + f_chi(T_star - dt)) / (dt ** 2)
+    
+    # Horizontal uncertainty of the peak position (SEM)
+    T_star_err = sig_slope / abs(f_double_prime)
+    
+    return T_star, T_star_err, Chi_max, Chi_max_err
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN LOOP OVER GEOMETRIES
+# ══════════════════════════════════════════════════════════════════════════════
+
+for geom in ['square', 'triangular']:
+    print(f"\n{'='*60}")
+    print(f"ANALYZING GEOMETRY: {geom.upper()}")
+    print(f"{'='*60}")
+    
+    base_path = CONFIGS[geom]['base_path']
+    suffix = CONFIGS[geom]['suffix']
+    tc_exact = TC_EXACT[geom]
+    
+    chi_dict  = {}
+    available_Ls = []
+
+    for L in L_sizes:
+        try:
+            T_arr, spins = load_npz_data(base_path, L, suffix)
+            print(f"  Computing Susceptibility for L={L} …")
+            chi_dict[L] = compute_susceptibility(T_arr, spins, L)
+            available_Ls.append(L)
+        except FileNotFoundError as e:
+            print(f"  Skipping L={L}: {e}")
+
+    if not available_Ls:
+        print(f"No data found for {geom}. Skipping plot.")
+        continue
+
+    available_Ls = sorted(available_Ls)
+    
+    # 2. Extract T* (peaks), Chi_max, and their rigorous SEM errors
+    crossing_Ts   = []
+    crossing_errs = []
+    chi_maxs      = []
+    chi_max_errs  = []
+    inv_L         = []
+
+    print(f"\n  Extracting parameters from Susceptibility peaks...")
+    for L in available_Ls:
+        T_star, T_star_err, Chi_max, Chi_max_err = find_susceptibility_peak(chi_dict[L])
+        crossing_Ts.append(T_star)
+        crossing_errs.append(T_star_err)
+        chi_maxs.append(Chi_max)
+        chi_max_errs.append(Chi_max_err)
+        inv_L.append(1.0 / L)
+        print(f"    L={L}: T* = {T_star:.5f} ± {T_star_err:.5f} (SEM) | Chi_max = {Chi_max:.3f} ± {Chi_max_err:.3f} (SEM)")
+
+    crossing_Ts = np.array(crossing_Ts)
+    crossing_errs = np.array(crossing_errs)
+    chi_maxs = np.array(chi_maxs)
+    chi_max_errs = np.array(chi_max_errs)
+    inv_L       = np.array(inv_L)
+
+    # 3. Weighted Linear Extrapolation 1/L → 0 
+    weights = 1.0 / (crossing_errs ** 2)
+    coeffs, cov = np.polyfit(inv_L, crossing_Ts, 1, w=weights, cov=True) 
+    
+    x_fit   = np.linspace(0, inv_L.max() * 1.08, 300)
+    y_fit   = np.polyval(coeffs, x_fit)
+    
+    Tc_extrap = coeffs[1]
+    Tc_err = np.sqrt(cov[1, 1])  # Standard Deviation of intercept fit parameter
+
+    print(f"\n  Extrapolated Tc (1/L → 0) : {Tc_extrap:.5f} ± {Tc_err:.5f} (SD of fit)")
+    print(f"  Exact Tc                  : {tc_exact:.5f}")
+    print(f"  Difference                : {abs(Tc_extrap - tc_exact):.5f}")
+
+    # 4. Critical Exponent Scaling Fit: ln(Chi_max) vs ln(L)
+    ln_L = np.log(available_Ls)
+    ln_chi_max = np.log(chi_maxs)
+    # Error propagation for log: d(ln(x)) = dx / x
+    ln_chi_max_err = chi_max_errs / chi_maxs
+    
+    scale_weights = 1.0 / (ln_chi_max_err ** 2)
+    scale_coeffs, scale_cov = np.polyfit(ln_L, ln_chi_max, 1, w=scale_weights, cov=True)
+    measured_exponent = scale_coeffs[0]
+    exponent_err = np.sqrt(scale_cov[0, 0])  # SD of the slope parameter
+    
+    print(f"  Measured Exponent γ/ν     : {measured_exponent:.4f} ± {exponent_err:.4f} (SD of fit)")
+    print(f"  Theoretical Exponent      : 1.7500")
+
+    # 5. Plotting (3 Panels)
+    colors  = plt.cm.plasma(np.linspace(0.1, 0.9, len(available_Ls)))
+    markers = ['x', '^', 'o', 'D', 's', 'P', '*', 'v', 'h']
+
+    fig, (ax_chi, ax_fss, ax_scale) = plt.subplots(1, 3, figsize=(19, 5))
+
+    # ── Left Panel: Susceptibility curves (SEM) ──
+    for j, L in enumerate(available_Ls):
+        df = chi_dict[L]
+        ax_chi.errorbar(df['Temperature'], df['Chi'], yerr=df['Chi_err'],
+                      marker=markers[j % len(markers)], markersize=4,
+                      linestyle='-', linewidth=1.2, color=colors[j],
+                      capsize=2, elinewidth=0.8, label=f'L = {L}')
+
+    ax_chi.axvline(x=tc_exact, color='darkorange', linewidth=1.8, linestyle='-',
+                 label=f'Exact $T_c/J = {tc_exact:.4f}$')
+    ax_chi.axvline(x=Tc_extrap, color='steelblue', linewidth=1.5, linestyle='--',
+                 label=fr'Extrap. $T_c/J = {Tc_extrap:.4f}$')
+    ax_chi.set_xlabel('$T/J$', fontsize=13)
+    ax_chi.set_ylabel(r'Magnetic Susceptibility $\chi$', fontsize=13)
+    ax_chi.legend(fontsize=8, framealpha=0.7)
+    ax_chi.grid(True, alpha=0.25)
+
+    # ── Middle Panel: Finite Size Scaling (T* SEM vs 1/L) ──
+    ax_fss.errorbar(inv_L, crossing_Ts, yerr=crossing_errs, marker='v', linestyle='', 
+                    color='crimson', markersize=8, capsize=4, elinewidth=1.2,
+                    label=r'$T^*/J$ Peak Position (SEM)')
+
+    ax_fss.plot(x_fit, y_fit, linestyle='--', linewidth=1.5, alpha=0.8, color='steelblue',
+              label=fr'Weighted Fit $T_c/J = {Tc_extrap:.4f} \pm {Tc_err:.4f}$')
+
+    ax_fss.axhline(y=tc_exact, color='darkorange', linewidth=1.8, linestyle='-',
+                 label=fr'Exact $T_c/J = {tc_exact:.4f}$')
+                 
+    # Plot the extrapolated intercept with its standard deviation (SD) error bounds at 1/L = 0
+    ax_fss.errorbar(0, Tc_extrap, yerr=Tc_err, marker='o', color='steelblue', 
+                    markersize=6, capsize=4, elinewidth=1.5, label='Extrapolated $T_c$ (SD)')
+
+    for k, (x, y, L) in enumerate(zip(inv_L, crossing_Ts, available_Ls)):
+        ax_fss.annotate(f'L={L}', xy=(x, y), xytext=(8, -2),
+                      textcoords='offset points', fontsize=8, color='dimgray')
+
+    ax_fss.set_xlabel('$1/L$', fontsize=13)
+    ax_fss.set_ylabel('$T^*/J$', fontsize=13)
+    ax_fss.set_xlim(-0.005, inv_L.max() * 1.15)
+    ax_fss.legend(fontsize=9, framealpha=0.7)
+    ax_fss.grid(True, alpha=0.25)
+
+    # ── Right Panel: Critical Exponent Scaling Plot ──
+    ax_scale.errorbar(ln_L, ln_chi_max, yerr=ln_chi_max_err, marker='o', linestyle='',
+                      color='indigo', markersize=7, capsize=4, elinewidth=1.2,
+                      label='Peaks Measured (SEM)')
+    
+    # Exponent Fit Line
+    ln_L_fit = np.linspace(ln_L.min() - 0.1, ln_L.max() + 0.1, 100)
+    ln_chi_fit = np.polyval(scale_coeffs, ln_L_fit)
+    ax_scale.plot(ln_L_fit, ln_chi_fit, 'g--', linewidth=1.5,
+                  label=fr'Linear Fit ($\nu/\gamma$ = {measured_exponent:.3f} $\pm$ {exponent_err:.3f})')
+    
+    # Theoretical Slope Line Reference (shifted to cross the first data point for visual parity)
+    ln_chi_theory_line = 1.75 * (ln_L_fit - ln_L[0]) + ln_chi_max[0]
+    ax_scale.plot(ln_L_fit, ln_chi_theory_line, color='darkgray', linestyle=':', linewidth=1.5,
+                  label='Theoretical Slope = 1.750')
+    
+    ax_scale.set_xlabel(r'$\ln(L)$', fontsize=13)
+    ax_scale.set_ylabel(r'$\ln(\chi_{\max})$', fontsize=13)
+    ax_scale.legend(fontsize=9, framealpha=0.7)
+    ax_scale.grid(True, alpha=0.25)
+
+    plt.tight_layout()
+    
+    safe_geom_name = geom.lower()
+    save_path = f'CSPProject/CSP-Project-Ising-CNN/susc_fss2_{safe_geom_name}.pdf'
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path, dpi=900, bbox_inches='tight')
+    plt.show()
+    print(f"Saved to {save_path}")
