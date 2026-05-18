@@ -119,8 +119,6 @@ available_Ls = sorted(available_Ls)
 print(f"\nAvailable system sizes: {available_Ls}")
 
 # ── Pairwise crossing temperatures ────────────────────────────────────────────
-# For each consecutive pair (L_i, L_{i+1}), find T* and assign it to
-# x = 2 / (1/L_i + 1/L_{i+1})  (harmonic mean L → natural midpoint)
 crossing_Ts   = []
 crossing_errs = []
 crossing_Ls   = []   # representative L for the x-axis
@@ -142,16 +140,18 @@ crossing_Ts   = np.array(crossing_Ts)
 crossing_errs = np.array(crossing_errs)
 inv_L         = 1.0 / np.array(crossing_Ls)
 
-# ── Linear extrapolation 1/L → 0 ──────────────────────────────────────────────
+# ── Linear extrapolation 1/L → 0 (Updated with exact error calculation) ───────
 valid   = ~np.isnan(crossing_errs)
 weights = 1.0 / crossing_errs[valid]**2          # inverse-variance weighting
-coeffs  = np.polyfit(inv_L[valid], crossing_Ts[valid], 1, w=weights)
+coeffs, cov = np.polyfit(inv_L[valid], crossing_Ts[valid], 1, w=weights, cov=True)
 x_fit   = np.linspace(0, inv_L.max() * 1.08, 300)
 y_fit   = np.polyval(coeffs, x_fit)
+
 Tc_extrap = coeffs[1]
+Tc_err = np.sqrt(cov[1, 1])  # Standard Deviation of intercept fit parameter
 
 print(f"\n{'='*50}")
-print(f"Extrapolated Tc (1/L → 0) : {Tc_extrap:.5f}")
+print(f"Extrapolated Tc (1/L → 0) : {Tc_extrap:.5f} ± {Tc_err:.5f} (SD of fit)")
 print(f"Exact Tc                   : {TC_TRI:.5f}")
 print(f"Difference                 : {abs(Tc_extrap - TC_TRI):.5f}")
 print(f"{'='*50}")
@@ -178,21 +178,24 @@ ax_b.axvline(x=Tc_extrap, color='steelblue',  linewidth=1.5, linestyle='--',
              label=f'Extrap. $T_c/J = {Tc_extrap:.4f}$')
 ax_b.set_xlabel('$T/J$', fontsize=13)
 ax_b.set_ylabel('Binder Cumulant $U_L$', fontsize=13)
-ax_b.set_title('Binder Cumulants — Triangular Ising', fontsize=12)
 ax_b.legend(fontsize=8, framealpha=0.7)
 ax_b.grid(True, alpha=0.25)
 
-# ── Right: panel-f style FSS ──────────────────────────────────────────────────
+# ── Right: panel-f style FSS (Updated to visualize standard deviation) ────────
 ax_f.errorbar(inv_L, crossing_Ts, yerr=crossing_errs,
               marker='v', linestyle='-', color='crimson',
               markersize=8, capsize=4, elinewidth=1.2, linewidth=1.5,
               label=r'$T^*/J$ (Binder crossing)')
 
 ax_f.plot(x_fit, y_fit, 'b--', linewidth=1.5, alpha=0.8,
-          label=fr'Linear extrap. $T_c/J = {Tc_extrap:.4f}$')
+          label=fr'Weighted extrap. $T_c/J = {Tc_extrap:.4f} \pm {Tc_err:.4f}$')
 
 ax_f.axhline(y=TC_TRI, color='darkorange', linewidth=1.8, linestyle='-',
              label=fr'Exact $T_c/J = {TC_TRI:.4f}$')
+
+# Plot the extrapolated intercept with its standard deviation (SD) error bounds at 1/L = 0
+ax_f.errorbar(0, Tc_extrap, yerr=Tc_err, marker='o', color='steelblue', 
+              markersize=6, capsize=4, elinewidth=1.5, label='Extrapolated $T_c$')
 
 # Annotate which L pairs each point represents
 for k, (x, y, L1, L2) in enumerate(zip(
@@ -203,15 +206,10 @@ for k, (x, y, L1, L2) in enumerate(zip(
 
 ax_f.set_xlabel('$1/L_{\\mathrm{harm}}$', fontsize=13)
 ax_f.set_ylabel('$T^*/J$', fontsize=13)
-ax_f.set_title('Finite-Size Scaling of Binder Crossing $T^*$', fontsize=12)
 ax_f.set_xlim(-0.002, inv_L.max() * 1.15)
 ax_f.legend(fontsize=9, framealpha=0.7)
 ax_f.grid(True, alpha=0.25)
-ax_f.text(0.03, 0.97, 'f', transform=ax_f.transAxes,
-          fontsize=14, fontweight='bold', va='top')
 
-plt.suptitle('Finite-Size Scaling — Triangular Ising (Binder Cumulant)',
-             fontsize=13, y=1.01)
 plt.tight_layout()
 plt.savefig('CSPProject/CSP-Project-Ising-CNN/binder_fss_triangular.pdf', dpi=900, bbox_inches='tight')
 plt.show()
