@@ -7,12 +7,12 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import json
 from pathlib import Path
 
-DATA_DIR = "data_decorr/"
-OUT_DIR = "models_100_mario/"
+DATA_DIR = "data_square_uploaded/" # adjust as needed based on where the data is located
+OUT_DIR = "models_3_mario/"
 
 BATCH_SIZE = 32
 #LAM_VAR = 3e-1   # weight-variance regularization strength (pushes w_ji toward being constant in i)
-L2 = 3e-3       # keep overall weight magnitude bounded
+L2 = 5e-2       # keep overall weight magnitude bounded
 
 """
 @tf.keras.utils.register_keras_serializable()
@@ -43,7 +43,7 @@ class WeightVarianceRegularizer(tf.keras.regularizers.Regularizer):
 """
         
 def build_model(config_size, hidden_nodes, l2):
-    initializer = tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0/config_size, seed=42)
+    initializer = tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0, seed=42)
 
     x = tf.keras.Input((config_size,))
     
@@ -52,9 +52,8 @@ def build_model(config_size, hidden_nodes, l2):
         activation='sigmoid',
         kernel_initializer=initializer,
         kernel_regularizer=tf.keras.regularizers.l2(l2)
-        #kernel_constraint=tf.keras.constraints.MaxNorm(max_value=3.0, axis=0)
     )(x)
-    z = tf.keras.layers.Dense(2, activation='softmax')(y)
+    z = tf.keras.layers.Dense(2, activation='sigmoid')(y)
     model = tf.keras.Model(inputs=x, outputs=z)
     model.compile(optimizer='adam', loss='binary_crossentropy')
     model.summary()
@@ -85,7 +84,7 @@ for L in [10, 20, 30, 40, 60]:
     train_label, val_label = np.split(labels, [80000], axis=0)
     train_T, val_T = np.split(T, [80000])
 
-    model3_2 = build_model(configs.shape[1], 100, L2)
+    model3_2 = build_model(configs.shape[1], 3, L2)
 
     w_init, b_init = model3_2.layers[1].get_weights()
 
